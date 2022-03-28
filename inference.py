@@ -10,6 +10,3 @@ with open('results/test_data.pkl', 'rb') as f:
 # Load model
 with open('checkpoints/net0_german_0.pickle', 'rb') as f:
     model = pickle.load(f)
-
-
-print(model(X_test))
