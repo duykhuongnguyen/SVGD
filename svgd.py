@@ -28,7 +28,7 @@ def RBF(X: Tensor, Y: Tensor, sigma: float):
 
 
 def svgd(model, X, y, random_init=True, n=4, epsilon=8/255, num_steps=20, loss_type='ce', step_size=1/255,
-         x_min=-1, x_max=1, sigma=1, output_all=False):
+         x_min=-1, x_max=1, sigma=1, output_all=False, postprocess=(lambda x:x)):
     '''
     Currently only works with RBF kernel, and L_inf norm.
 
@@ -67,7 +67,7 @@ def svgd(model, X, y, random_init=True, n=4, epsilon=8/255, num_steps=20, loss_t
         # reset leaf variable
         X_adv = Variable(X_adv.data, requires_grad=True)
         if loss_type == 'ce':
-            loss = cross_entropy(model(X_adv), y.repeat(n), reduction='none')
+            loss = cross_entropy(model(postprocess(X_adv.clone())), y.repeat(n), reduction='none')
         elif loss_type == 'kl':
             # currently the code doesn't work correctly, since matrix calculus is complicated
             raise NotImplementedError
@@ -87,12 +87,13 @@ def svgd(model, X, y, random_init=True, n=4, epsilon=8/255, num_steps=20, loss_t
         # print(K_XX.shape, grad_log.shape, grad_K.shape)
         phi = (K_XX @ grad_log + grad_K) / n
         # PGD-like, remove the .sign() if needed!
-        # X_adv = (X_adv + step_size * phi.sign()).reshape(batch_size * n, c, h, w)
-        X_adv = (X_adv + step_size * phi)#.reshape(batch_size * n, c, h, w)
+        X_adv = (X_adv + step_size * phi.sign())#.reshape(batch_size * n, c, h, w)
 
         # clamping adversary into valid image
         X_adv = torch.clamp(X_adv, X_particles - epsilon, X_particles + epsilon)
         X_adv = torch.clamp(X_adv, x_min, x_max)
+
+        # X_adv = postprocess(X_adv)
 
         if output_all:
             all_advs.append(X_adv.detach())
@@ -141,7 +142,7 @@ class SVGD:
         self.sigma = sigma
 
 
-    def __call__(self, data, n=4, output_all=False, ensemble=True):
+    def __call__(self, data, n=4, output_all=False, ensemble=True, postprocess=(lambda x: x)):
         '''
         If output_all is True, return the bundled n adversaries for each iteration.
         If ensemble is True, return only the one of the successful attacks if exists.
@@ -152,7 +153,8 @@ class SVGD:
 
         X_adv = svgd(
             self.model, data, label, random_init=self.random_init, n=n, epsilon=self.epsilon, num_steps=self.num_steps,
-            loss_type=self.loss_type, step_size=self.step_size, x_min=-1, x_max=1, sigma=1, output_all=output_all
+            loss_type=self.loss_type, step_size=self.step_size, x_min=-1, x_max=1, sigma=1, output_all=output_all,
+            postprocess=postprocess
         )
 
         if output_all or not ensemble:

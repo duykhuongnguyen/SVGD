@@ -27,13 +27,40 @@ def print_data(data):
 test_data = X_test[42:43, ...]
 print('[+] Clean example')
 print_data(test_data[0, ...])
-print(f'Prediction: {model(test_data)[0, 0].item() * 100:.2f}%\n')
+output = model(test_data)[0, 0].item()
+print(f'Prediction: {output * 100:.2f}%\n')
+output = output > 0.5
 
 from svgd import SVGD
-attacker = SVGD(model)
+attacker = SVGD(model, num_steps=100, epsilon=1, step_size=1/255, clip_min=-1)
 
-x_adv = attacker(test_data, ensemble=False)
+def postprocess(x):
+    pos = torch.max(x[:, 3:], dim=1)[1]
+    x = x.clone()
+    x[:, 3:] = 0
+    for i, j in enumerate(pos):
+        x[i, 3 + j] = 1
+    return x
+
+x_adv_list = attacker(test_data, ensemble=False, postprocess=postprocess, output_all=True)
+
+found = [False] * 4
+x_adv = torch.empty_like(x_adv_list[0])
+for x_adv_ in x_adv_list:
+    x_adv_ = postprocess(x_adv_)
+    output_ = model(x_adv_)
+    for i in range(4):
+        if not found[i]:
+            if (output_[i, 0].item() > 0.5) != output:
+                x_adv[i, ...] = x_adv_[i, ...]
+                found[i] = True
+    if all(found):
+        break
+
+count = 0
 for i in range(4):
-    print(f'[+] Counterfactual #{i}')
-    print_data(x_adv[i, ...])
-    print(f'Prediction: {model(x_adv)[i, 0].item() * 100:.2f}%\n')
+    if found[i]:
+        count += 1
+        print(f'[+] Counterfactual #{count}')
+        print_data(x_adv[i, ...])
+        print(f'Prediction: {model(x_adv)[i, 0].item() * 100:.2f}%\n')
