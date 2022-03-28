@@ -32,24 +32,26 @@ print(f'Prediction: {output * 100:.2f}%\n')
 output = output > 0.5
 
 from svgd import SVGD
-attacker = SVGD(model, num_steps=100, epsilon=1, step_size=1/255, clip_min=-1)
+attacker = SVGD(model, num_steps=100, epsilon=2, step_size=1/255, clip_min=-1)
 
 def postprocess(x):
     pos = torch.max(x[:, 3:], dim=1)[1]
     x = x.clone()
-    x[:, 3:] = 0
+    x.data[:, 3:] = 0
     for i, j in enumerate(pos):
-        x[i, 3 + j] = 1
+        x.data[i, 3 + j] = 1
     return x
 
-x_adv_list = attacker(test_data, ensemble=False, postprocess=postprocess, output_all=True)
+# NOTE: SELECT THE MAXIMUM NUMBER OF COUNTERFACTUALS GENERATED HERE
+max_counterfactual = 4
+x_adv_list = attacker(test_data, ensemble=False, postprocess=postprocess, output_all=True, n=max_counterfactual)
 
-found = [False] * 4
+found = [False] * max_counterfactual
 x_adv = torch.empty_like(x_adv_list[0])
 for x_adv_ in x_adv_list:
     x_adv_ = postprocess(x_adv_)
     output_ = model(x_adv_)
-    for i in range(4):
+    for i in range(max_counterfactual):
         if not found[i]:
             if (output_[i, 0].item() > 0.5) != output:
                 x_adv[i, ...] = x_adv_[i, ...]
@@ -58,7 +60,7 @@ for x_adv_ in x_adv_list:
         break
 
 count = 0
-for i in range(4):
+for i in range(max_counterfactual):
     if found[i]:
         count += 1
         print(f'[+] Counterfactual #{count}')
