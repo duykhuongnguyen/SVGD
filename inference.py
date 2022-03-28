@@ -23,7 +23,9 @@ def print_data(data):
     print(f'Age: {data[2]:.4f}')
     print(f'PSS: {data[3:]}')
 
+# NOTE: SELECT TEST DATA HERE
 test_data = X_test[42:43, ...]
+print('[+] Clean example')
 print_data(test_data[0, ...])
 print(f'Prediction: {model(test_data)[0, 0].item() * 100:.2f}%\n')
 
@@ -31,7 +33,7 @@ from svgd import SVGD
 attacker = SVGD(model)
 
 x_adv = attacker(test_data, ensemble=False)
-# print(x_adv.shape)
 for i in range(4):
+    print(f'[+] Counterfactual #{i}')
     print_data(x_adv[i, ...])
     print(f'Prediction: {model(x_adv)[i, 0].item() * 100:.2f}%\n')
